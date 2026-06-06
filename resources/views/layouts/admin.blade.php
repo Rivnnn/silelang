@@ -308,6 +308,10 @@
                 <span>⚖️</span> Pengajuan Lelang
             </a>
 
+            <a href="{{ route('admin.monitoring.trr') }}" class="{{ Request::is('admin/monitoring-trr*') ? 'active' : '' }}">
+                <span>💰</span> Monitoring TRR
+            </a>
+
             <div class="menu-label">Manajemen</div>
             <a href="{{ route('admin.manajemen-user') }}" class="{{ Request::is('admin/manajemen-user') ? 'active' : '' }}">
                 <span>👤</span> Kelola Petugas

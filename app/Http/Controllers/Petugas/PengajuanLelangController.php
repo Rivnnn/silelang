@@ -29,24 +29,24 @@ class PengajuanLelangController extends Controller
     /**
      * Store pengajuan lelang baru
      */
-    public function store(Request $request)
+   public function store(Request $request)
     {
         $request->validate([
-            'nasabah_id' => 'required|exists:nasabah,id',
-            'tanggal_pengajuan' => 'required|date'
+            'nasabah_id'         => 'required|exists:nasabah,id',
+            'tanggal_pengajuan'  => 'required|date',
+            'estimasi_dana_trr'  => 'nullable|numeric|min:0',  // ← tambah validasi
         ], [
-            'nasabah_id.required' => 'Nasabah wajib dipilih',
-            'nasabah_id.exists' => 'Nasabah tidak ditemukan',
+            'nasabah_id.required'        => 'Nasabah wajib dipilih',
+            'nasabah_id.exists'          => 'Nasabah tidak ditemukan',
             'tanggal_pengajuan.required' => 'Tanggal pengajuan wajib diisi',
-            'tanggal_pengajuan.date' => 'Format tanggal tidak valid',
+            'tanggal_pengajuan.date'     => 'Format tanggal tidak valid',
+            'estimasi_dana_trr.numeric'  => 'Estimasi TRR harus berupa angka',
         ]);
 
-        // Validasi nasabah milik petugas yang login
         $nasabah = Nasabah::where('id', $request->nasabah_id)
             ->where('user_id', auth()->id())
             ->firstOrFail();
 
-        // Cek apakah nasabah sudah pernah diajukan dan masih pending
         $existingPending = PengajuanLelang::where('nasabah_id', $request->nasabah_id)
             ->where('status', 'pending')
             ->first();
@@ -55,7 +55,6 @@ class PengajuanLelangController extends Controller
             return back()->with('error', 'Nasabah ini sudah diajukan dan masih menunggu review admin');
         }
 
-        // Cek apakah nasabah sudah pernah disetujui
         $existingApproved = PengajuanLelang::where('nasabah_id', $request->nasabah_id)
             ->where('status', 'disetujui')
             ->first();
@@ -64,13 +63,13 @@ class PengajuanLelangController extends Controller
             return back()->with('error', 'Nasabah ini sudah pernah disetujui untuk lelang');
         }
 
-        // Simpan pengajuan lelang
         PengajuanLelang::create([
-            'nasabah_id' => $request->nasabah_id,
-            'user_id' => auth()->id(),
+            'nasabah_id'        => $request->nasabah_id,
+            'user_id'           => auth()->id(),
             'tanggal_pengajuan' => $request->tanggal_pengajuan,
-            'status' => 'pending',
-            'catatan_admin' => null
+            'estimasi_dana_trr' => $request->estimasi_dana_trr,  // ← tambah ini
+            'status'            => 'pending',
+            'catatan_admin'     => null,
         ]);
 
         return back()->with('success', 'Pengajuan lelang berhasil dikirim. Menunggu review dari admin.');

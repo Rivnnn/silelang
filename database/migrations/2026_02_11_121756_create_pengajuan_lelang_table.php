@@ -6,6 +6,7 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
+
     public function up(): void
     {
         Schema::create('pengajuan_lelang', function (Blueprint $table) {
@@ -15,6 +16,7 @@ return new class extends Migration
             $table->enum('status', ['pending', 'disetujui', 'ditolak'])->default('pending');
             $table->text('catatan_admin')->nullable();
             $table->date('tanggal_pengajuan');
+            $table->decimal('estimasi_dana_trr', 15, 2)->nullable();
             $table->timestamps();
         });
     }

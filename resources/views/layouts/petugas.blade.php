@@ -381,6 +381,10 @@
             <a href="{{ route('petugas.pengajuan-lelang.index') }}" class="{{ Request::is('petugas/pengajuan-lelang') ? 'active' : '' }}">
                 <span>⚖️</span> Pengajuan Lelang
             </a>
+
+            <a href="{{ route('petugas.dana-trr.index') }}" class="{{ Request::is('petugas/dana-trr*') ? 'active' : '' }}">
+                <span>💰</span> Dana TRR
+            </a>
         </div>
 
         <div class="sidebar-footer">

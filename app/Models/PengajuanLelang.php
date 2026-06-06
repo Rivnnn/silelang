@@ -13,11 +13,13 @@ class PengajuanLelang extends Model
         'user_id',
         'status',
         'catatan_admin',
-        'tanggal_pengajuan'
+        'tanggal_pengajuan',
+        'estimasi_dana_trr',
     ];
 
     protected $casts = [
-        'tanggal_pengajuan' => 'date'
+        'tanggal_pengajuan' => 'date',
+        'estimasi_dana_trr' => 'decimal:2', 
     ];
 
     public function nasabah()
@@ -29,4 +31,23 @@ class PengajuanLelang extends Model
     {
         return $this->belongsTo(User::class);
     }
+
+    public function danaTrr()
+    {
+        return $this->hasOne(DanaTrr::class);
+    }
+
+    public function pengajuanTrr()
+    {
+        return $this->hasMany(PengajuanTrr::class);
+    }
+
+    // Cek apakah lelang ini sudah punya pengajuan TRR aktif
+    public function hasPengajuanTrrPending(): bool
+    {
+        return $this->pengajuanTrr()
+                    ->where('status', 'pending')
+                    ->exists();
+    }
+    
 }

@@ -61,4 +61,26 @@ class User extends Authenticatable
     {
         return $this->hasMany(PengajuanLelang::class);
     }
+
+    public function danaTrrApproved()
+    {
+        return $this->hasMany(DanaTrr::class, 'approved_by');
+    }
+
+    // Dana TRR yang pernah dikonfirmasi oleh user ini (petugas)
+    public function danaTrrConfirmed()
+    {
+        return $this->hasMany(DanaTrr::class, 'confirmed_by');
+    }
+
+    // Shortcut: ambil semua TRR aktif milik petugas ini
+    // (via pengajuan_lelang -> dana_trr)
+    public function activeTrr()
+    {
+        return DanaTrr::whereHas('pengajuanLelang', function ($q) {
+                $q->where('user_id', $this->id);
+            })
+            ->where('status', 'aktif')
+            ->get();
+    }
 }

@@ -55,6 +55,22 @@ Route::prefix('admin')
             
         Route::get('/nasabah/{id}/dokumen', [App\Http\Controllers\Admin\NasabahController::class, 'showDokumen'])
              ->name('nasabah.dokumen');
+
+        Route::get('/monitoring-trr', [App\Http\Controllers\Admin\MonitoringTrrController::class, 'index'])
+            ->name('monitoring.trr');
+        Route::post('/monitoring-trr/{id}/approve', [App\Http\Controllers\Admin\MonitoringTrrController::class, 'approve'])
+            ->name('monitoring.trr.approve');
+        Route::post('/monitoring-trr/{id}/reject', [App\Http\Controllers\Admin\MonitoringTrrController::class, 'reject'])
+            ->name('monitoring.trr.reject');
+        Route::get('/monitoring-trr/{id}/detail', [App\Http\Controllers\Admin\MonitoringTrrController::class, 'detail'])
+            ->name('monitoring.trr.detail');
+
+        Route::post('/monitoring-trr/{id}/hasil', [App\Http\Controllers\Admin\MonitoringTrrController::class, 'storeHasil'])
+            ->name('monitoring.trr.hasil.store');
+        
+        // Export rekap hasil lelang ke CSV
+        Route::get('/monitoring-trr/export-hasil', [App\Http\Controllers\Admin\MonitoringTrrController::class, 'exportHasil'])
+            ->name('monitoring.trr.export');
     });
 
 // ============================================
@@ -118,4 +134,30 @@ Route::prefix('petugas')
             ->name('pengajuan-lelang.index');
         Route::post('/pengajuan-lelang', [App\Http\Controllers\Petugas\PengajuanLelangController::class, 'store'])
             ->name('pengajuan-lelang.store');
+
+         Route::get('/dana-trr', [App\Http\Controllers\Petugas\DanaTrrController::class, 'index'])
+            ->name('dana-trr.index');
+
+        // Konfirmasi penerimaan dana
+        Route::post('/dana-trr/{id}/konfirmasi', [App\Http\Controllers\Petugas\DanaTrrController::class, 'konfirmasi'])
+            ->name('dana-trr.konfirmasi');
+
+        // Halaman buku kas (ledger) satu TRR tertentu
+        Route::get('/dana-trr/{id}/ledger', [App\Http\Controllers\Petugas\DanaTrrController::class, 'ledger'])
+            ->name('dana-trr.ledger');
+
+        // Simpan satu baris pengeluaran baru ke ledger
+        Route::post('/dana-trr/{id}/ledger', [App\Http\Controllers\Petugas\DanaTrrController::class, 'storeLedger'])
+            ->name('dana-trr.ledger.store');
+
+        // Tandai lelang selesai / tutup buku kas
+        Route::post('/dana-trr/{id}/selesai', [App\Http\Controllers\Petugas\DanaTrrController::class, 'selesai'])
+            ->name('dana-trr.selesai');
+
+        // Export PDF ledger
+        Route::get('/dana-trr/{id}/export-pdf', [App\Http\Controllers\Petugas\DanaTrrController::class, 'exportPdf'])
+            ->name('dana-trr.export-pdf');
+
+        Route::post('/pengajuan-trr', [App\Http\Controllers\Petugas\PengajuanTrrController::class, 'store'])
+            ->name('pengajuan-trr.store');
     });
