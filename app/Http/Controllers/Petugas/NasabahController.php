@@ -5,6 +5,7 @@ namespace App\Http\Controllers\Petugas;
 use App\Http\Controllers\Controller;
 use App\Models\Nasabah;
 use App\Models\DokumenNasabah;
+use App\Models\Lpa;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
@@ -12,9 +13,19 @@ use Illuminate\Support\Facades\DB;
 class NasabahController extends Controller
 {
     /**
-     * Daftar dokumen wajib untuk lelang
+     * Daftar jenis lelang yang valid — satu-satunya sumber kebenaran.
+     * Dipakai oleh validasi store() dan opsi <select> di view.
      */
-    private $dokumenWajib = [
+    const JENIS_LELANG = [
+        'Tanah',
+        'Bangunan',
+        'Tanah Berikut Bangunan',
+        'Lelang Eksekusi HT',
+        'Lelang Eksekusi Pengadilan',
+        'Lelang Sukarela',
+    ];
+
+    private array $dokumenWajib = [
         'Permohonan Lelang',
         'Pernyataan Lelang',
         'Surat Kuasa Lelang',
@@ -33,97 +44,109 @@ class NasabahController extends Controller
         'Pengumuman Pertama',
         'Pengumuman Kedua Koran',
         'Surat Penetapan',
-        'BA Musyawarah'
+        'BA Musyawarah',
     ];
 
     /**
-     * Display listing of nasabah untuk petugas yang login
+     * Halaman utama — daftar nasabah dengan filter & paginasi.
+     *
+     * Bug yang diperbaiki:
+     *  1. filter_jenis dan filter_dokumen sebelumnya diabaikan.
+     *  2. Hitung jumlah_dokumen dan jumlah_lpa pakai subquery (efisien, kompatibel paginate).
+     *  3. $nasabah dikembalikan sebagai LengthAwarePaginator agar ->total(),
+     *     ->firstItem(), dsb. bekerja di view (sebelumnya di-get() lalu di-map()).
      */
     public function index(Request $request)
     {
-        $keyword = $request->search;
-
-        // Hanya tampilkan nasabah yang dibuat oleh petugas yang login
-        $nasabah = Nasabah::where('user_id', auth()->id())
-            ->when($keyword, function ($query) use ($keyword) {
-                $query->where('nama_nasabah', 'like', "%$keyword%")
-                      ->orWhere('nik', 'like', "%$keyword%")
-                      ->orWhere('jenis_lelang', 'like', "%$keyword%");
+        $query = Nasabah::query()
+            ->where('user_id', auth()->id())
+            // Hitung dokumen & LPA via subquery — efisien, tidak N+1
+            ->withCount([
+                'dokumen as jumlah_dokumen' => fn ($q) => $q->whereNotNull('link_dokumen'),
+                'lpa as jumlah_lpa',
+            ])
+            // Filter: kata kunci (nama / NIK / jenis)
+            ->when($request->filled('search'), function ($q) use ($request) {
+                $kw = '%' . trim($request->search) . '%';
+                $q->where(function ($q2) use ($kw) {
+                    $q2->where('nama_nasabah', 'like', $kw)
+                       ->orWhere('nik', 'like', $kw)
+                       ->orWhere('jenis_lelang', 'like', $kw);
+                });
             })
-            ->latest()
-            ->get();
+            // Filter: jenis lelang
+            ->when($request->filled('filter_jenis'), function ($q) use ($request) {
+                $q->where('jenis_lelang', $request->filter_jenis);
+            })
+            // Filter: status dokumen (butuh HAVING karena pakai withCount)
+            ->when($request->filled('filter_dokumen'), function ($q) use ($request) {
+                match ($request->filter_dokumen) {
+                    'lengkap' => $q->having('jumlah_dokumen', '>=', count($this->dokumenWajib)),
+                    'proses'  => $q->having('jumlah_dokumen', '>', 0)
+                                   ->having('jumlah_dokumen', '<', count($this->dokumenWajib)),
+                    'kosong'  => $q->having('jumlah_dokumen', 0),
+                    default   => null,
+                };
+            })
+            ->latest();
 
-        return view('petugas.nasabah.index', compact('nasabah'));
+        $nasabah = $query->paginate(15)->withQueryString();
+
+        return view('petugas.nasabah.index', [
+            'nasabah'     => $nasabah,
+            'jenisLelang' => self::JENIS_LELANG,
+        ]);
     }
 
     /**
-     * Store nasabah baru
+     * Simpan nasabah baru.
+     *
+     * Bug yang diperbaiki:
+     *  — Validasi in: sekarang menggunakan self::JENIS_LELANG,
+     *    sehingga semua 6 opsi di form diterima.
      */
     public function store(Request $request)
     {
-        // Validasi input
         $validated = $request->validate([
-            'nama_nasabah' => 'required|string|max:255',
-            'nik' => 'required|string|size:16|unique:nasabah,nik',
-            'alamat' => 'required|string|max:500',
-            'no_hp' => 'required|string|max:20',
+            'nama_nasabah'  => 'required|string|max:255',
+            'nik'           => 'required|string|size:16|unique:nasabah,nik',
+            'alamat'        => 'required|string|max:500',
+            'no_hp'         => 'required|string|max:20',
             'lokasi_lelang' => 'required|string|max:255',
-            'jenis_lelang' => 'required|in:Tanah,Bangunan,Tanah Berikut Bangunan',
+            'jenis_lelang'  => ['required', 'string', \Illuminate\Validation\Rule::in(self::JENIS_LELANG)],
         ], [
-            'nama_nasabah.required' => 'Nama nasabah wajib diisi',
-            'nama_nasabah.max' => 'Nama nasabah maksimal 255 karakter',
-            
-            'nik.required' => 'NIK wajib diisi',
-            'nik.size' => 'NIK harus 16 digit',
-            'nik.unique' => 'NIK sudah terdaftar dalam sistem',
-            
-            'alamat.required' => 'Alamat wajib diisi',
-            'alamat.max' => 'Alamat maksimal 500 karakter',
-            
-            'no_hp.required' => 'No HP wajib diisi',
-            'no_hp.max' => 'No HP maksimal 20 karakter',
-            
-            'lokasi_lelang.required' => 'Lokasi lelang wajib diisi',
-            'lokasi_lelang.max' => 'Lokasi lelang maksimal 255 karakter',
-            
-            'jenis_lelang.required' => 'Jenis lelang wajib dipilih',
-            'jenis_lelang.in' => 'Jenis lelang tidak valid',
+            'nama_nasabah.required'  => 'Nama nasabah wajib diisi.',
+            'nik.required'           => 'NIK wajib diisi.',
+            'nik.size'               => 'NIK harus tepat 16 digit.',
+            'nik.unique'             => 'NIK sudah terdaftar dalam sistem.',
+            'alamat.required'        => 'Alamat wajib diisi.',
+            'no_hp.required'         => 'No. HP wajib diisi.',
+            'lokasi_lelang.required' => 'Lokasi lelang wajib diisi.',
+            'jenis_lelang.required'  => 'Jenis lelang wajib dipilih.',
+            'jenis_lelang.in'        => 'Jenis lelang tidak valid.',
         ]);
 
         try {
             DB::beginTransaction();
 
-            // Bersihkan dan format data
             $nasabah = Nasabah::create([
-                'user_id' => auth()->id(),
-                'nama_nasabah' => trim($request->nama_nasabah),
-                'nik' => trim($request->nik),
-                'alamat' => trim($request->alamat),
-                'no_hp' => trim($request->no_hp),
-                'lokasi_lelang' => trim($request->lokasi_lelang),
-                'jenis_lelang' => $request->jenis_lelang,
+                'user_id'       => auth()->id(),
+                'nama_nasabah'  => trim($validated['nama_nasabah']),
+                'nik'           => trim($validated['nik']),
+                'alamat'        => trim($validated['alamat']),
+                'no_hp'         => trim($validated['no_hp']),
+                'lokasi_lelang' => trim($validated['lokasi_lelang']),
+                'jenis_lelang'  => $validated['jenis_lelang'],
             ]);
 
             DB::commit();
 
-            Log::info('Nasabah baru berhasil ditambahkan', [
-                'user_id' => auth()->id(),
-                'nasabah_id' => $nasabah->id,
-                'nama' => $nasabah->nama_nasabah
-            ]);
-
             return redirect()->route('petugas.nasabah.index')
-                ->with('success', "✓ Data nasabah '{$nasabah->nama_nasabah}' berhasil ditambahkan");
+                ->with('success', "Data nasabah '{$nasabah->nama_nasabah}' berhasil ditambahkan.");
 
         } catch (\Exception $e) {
             DB::rollBack();
-            
-            Log::error('Error saat menambahkan nasabah', [
-                'user_id' => auth()->id(),
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
-
+            Log::error('Error tambah nasabah: ' . $e->getMessage(), ['trace' => $e->getTraceAsString()]);
             return redirect()->back()
                 ->with('error', 'Terjadi kesalahan saat menyimpan data. Silakan coba lagi.')
                 ->withInput();
@@ -131,114 +154,147 @@ class NasabahController extends Controller
     }
 
     /**
-     * Show dokumen nasabah
+     * Halaman dokumen nasabah.
      */
-    public function showDokumen($id)
-    {
-        try {
-            $nasabah = Nasabah::where('id', $id)
-                ->where('user_id', auth()->id())
-                ->firstOrFail();
-
-            $dokumen = DokumenNasabah::where('nasabah_id', $id)
-                ->get()
-                ->keyBy('nama_dokumen');
-
-            return view('petugas.nasabah.dokumen', [
-                'nasabah' => $nasabah,
-                'dokumenWajib' => $this->dokumenWajib,
-                'dokumen' => $dokumen
-            ]);
-
-        } catch (\Illuminate\Database\Eloquent\ModelNotFoundException $e) {
-            return redirect()->route('petugas.nasabah.index')
-                ->with('error', 'Nasabah tidak ditemukan atau Anda tidak memiliki akses');
-        }
-    }
-
-    /**
-     * Edit nasabah (opsional - untuk future enhancement)
-     */
-    public function edit($id)
+    public function showDokumen(int $id)
     {
         $nasabah = Nasabah::where('id', $id)
             ->where('user_id', auth()->id())
             ->firstOrFail();
 
-        $allNasabah = Nasabah::where('user_id', auth()->id())
-            ->latest()
-            ->get();
+        $dokumen = DokumenNasabah::where('nasabah_id', $id)
+            ->get()
+            ->keyBy('nama_dokumen');
 
-        return view('petugas.nasabah.index', [
-            'nasabah' => $allNasabah,
-            'editNasabah' => $nasabah
+        return view('petugas.nasabah.dokumen', [
+            'nasabah'      => $nasabah,
+            'dokumenWajib' => $this->dokumenWajib,
+            'dokumen'      => $dokumen,
         ]);
     }
 
     /**
-     * Update nasabah (opsional - untuk future enhancement)
+     * Simpan / update dokumen nasabah.
      */
-    public function update(Request $request, $id)
+    public function storeDokumen(Request $request, int $id)
+    {
+        $nasabah = Nasabah::where('id', $id)
+            ->where('user_id', auth()->id())
+            ->firstOrFail();
+
+        $request->validate([
+            'dokumen'         => 'required|array|min:1',
+            'dokumen.*.nama'  => 'required|string',
+            'dokumen.*.link'  => 'nullable|url',
+        ], [
+            'dokumen.*.link.url' => 'Link dokumen harus berupa URL yang valid.',
+        ]);
+
+        try {
+            DB::beginTransaction();
+
+            $savedCount = $updatedCount = $skippedCount = 0;
+
+            foreach ($request->dokumen as $doc) {
+                if (! in_array($doc['nama'], $this->dokumenWajib)) {
+                    continue;
+                }
+
+                if (empty(trim($doc['link'] ?? ''))) {
+                    $skippedCount++;
+                    continue;
+                }
+
+                if (! filter_var($doc['link'], FILTER_VALIDATE_URL)) {
+                    continue;
+                }
+
+                $existing = DokumenNasabah::where('nasabah_id', $id)
+                    ->where('nama_dokumen', $doc['nama'])
+                    ->exists();
+
+                DokumenNasabah::updateOrCreate(
+                    ['nasabah_id' => $id, 'nama_dokumen' => $doc['nama']],
+                    ['link_dokumen' => trim($doc['link'])]
+                );
+
+                $existing ? $updatedCount++ : $savedCount++;
+            }
+
+            DB::commit();
+
+            $parts = [];
+            if ($savedCount > 0)   $parts[] = "{$savedCount} dokumen baru disimpan";
+            if ($updatedCount > 0) $parts[] = "{$updatedCount} dokumen diperbarui";
+            if ($skippedCount > 0) $parts[] = "{$skippedCount} dokumen dilewati (link kosong)";
+
+            return back()->with('success', implode(', ', $parts) . '.');
+
+        } catch (\Exception $e) {
+            DB::rollBack();
+            Log::error('Error simpan dokumen: ' . $e->getMessage());
+            return back()->with('error', 'Terjadi kesalahan saat menyimpan dokumen.');
+        }
+    }
+
+    /**
+     * Halaman LPA nasabah.
+     */
+    public function showLpa(int $id)
+    {
+        $nasabah = Nasabah::where('id', $id)
+            ->where('user_id', auth()->id())
+            ->firstOrFail();
+
+        $lpaList = Lpa::where('nasabah_id', $id)->latest()->get();
+
+        return view('petugas.nasabah.lpa', compact('nasabah', 'lpaList'));
+    }
+
+    /**
+     * Simpan LPA baru.
+     */
+    public function storeLpa(Request $request, int $id)
     {
         $nasabah = Nasabah::where('id', $id)
             ->where('user_id', auth()->id())
             ->firstOrFail();
 
         $validated = $request->validate([
-            'nama_nasabah' => 'required|string|max:255',
-            'nik' => 'required|string|size:16|unique:nasabah,nik,' . $id,
-            'alamat' => 'required|string|max:500',
-            'no_hp' => 'required|string|max:20',
-            'lokasi_lelang' => 'required|string|max:255',
-            'jenis_lelang' => 'required|in:Tanah,Bangunan,Tanah Berikut Bangunan',
+            'jenis_legalitas' => 'required|string|in:SHM,SHGB',
+            'luas_tanah'      => 'required|numeric|min:0',
+            'luas_bangunan'   => 'required|numeric|min:0',
+            'spek_bangunan'   => 'required|string',
+            'nilai_pasar'     => 'required|numeric|min:0',
+            'nilai_likuidasi' => 'required|numeric|min:0',
+            'lelang_ke'       => 'required|integer|in:1,2,3',
         ]);
 
-        try {
-            $nasabah->update([
-                'nama_nasabah' => trim($request->nama_nasabah),
-                'nik' => trim($request->nik),
-                'alamat' => trim($request->alamat),
-                'no_hp' => trim($request->no_hp),
-                'lokasi_lelang' => trim($request->lokasi_lelang),
-                'jenis_lelang' => $request->jenis_lelang,
-            ]);
+        $nilaiPasar     = (float) $validated['nilai_pasar'];
+        $nilaiLikuidasi = (float) $validated['nilai_likuidasi'];
 
-            return redirect()->route('petugas.nasabah.index')
-                ->with('success', "✓ Data nasabah '{$nasabah->nama_nasabah}' berhasil diperbarui");
+        $nilaiLimit = match ((int) $validated['lelang_ke']) {
+            1       => $nilaiPasar,
+            2       => ($nilaiPasar + $nilaiLikuidasi) / 2,
+            default => $nilaiLikuidasi,
+        };
 
-        } catch (\Exception $e) {
-            Log::error('Error update nasabah: ' . $e->getMessage());
-            return redirect()->back()
-                ->with('error', 'Gagal memperbarui data nasabah')
-                ->withInput();
-        }
-    }
+        $uangJaminan = 0.2 * $nilaiLimit;
 
-    /**
-     * Delete nasabah (opsional - untuk future enhancement)
-     */
-    public function destroy($id)
-    {
-        try {
-            $nasabah = Nasabah::where('id', $id)
-                ->where('user_id', auth()->id())
-                ->firstOrFail();
+        Lpa::create([
+            'user_id'         => auth()->id(),
+            'nasabah_id'      => $id,
+            'jenis_legalitas' => $validated['jenis_legalitas'],
+            'luas_tanah'      => $validated['luas_tanah'],
+            'luas_bangunan'   => $validated['luas_bangunan'],
+            'spek_bangunan'   => $validated['spek_bangunan'],
+            'nilai_pasar'     => $nilaiPasar,
+            'nilai_likuidasi' => $nilaiLikuidasi,
+            'lelang_ke'       => $validated['lelang_ke'],
+            'nilai_limit'     => $nilaiLimit,
+            'uang_jaminan'    => $uangJaminan,
+        ]);
 
-            $nama = $nasabah->nama_nasabah;
-            
-            // Hapus dokumen terkait dulu
-            DokumenNasabah::where('nasabah_id', $id)->delete();
-            
-            // Hapus nasabah
-            $nasabah->delete();
-
-            return redirect()->route('petugas.nasabah.index')
-                ->with('success', "✓ Data nasabah '{$nama}' berhasil dihapus");
-
-        } catch (\Exception $e) {
-            Log::error('Error delete nasabah: ' . $e->getMessage());
-            return redirect()->back()
-                ->with('error', 'Gagal menghapus data nasabah');
-        }
+        return back()->with('success', 'Data LPA berhasil disimpan.');
     }
 }

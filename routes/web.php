@@ -90,16 +90,25 @@ Route::prefix('petugas')
             ->name('nasabah.index');
         Route::post('/data-nasabah', [App\Http\Controllers\Petugas\NasabahController::class, 'store'])
             ->name('nasabah.store');
+
+        // Dokumen per nasabah
         Route::get('/nasabah/{id}/dokumen', [App\Http\Controllers\Petugas\NasabahController::class, 'showDokumen'])
             ->name('nasabah.dokumen');
-        
-        // Upload Dokumen
-        Route::get('/upload-dokumen', [App\Http\Controllers\Petugas\DokumenController::class, 'listNasabah'])
-            ->name('dokumen.list');
-        Route::get('/upload-dokumen/{id}', [App\Http\Controllers\Petugas\DokumenController::class, 'form'])
-            ->name('dokumen.form');
-        Route::post('/upload-dokumen/{id}', [App\Http\Controllers\Petugas\DokumenController::class, 'store'])
-            ->name('dokumen.store');
+        Route::post('/nasabah/{id}/dokumen', [App\Http\Controllers\Petugas\NasabahController::class, 'storeDokumen'])
+            ->name('nasabah.dokumen.store');
+
+        // LPA per nasabah
+        Route::get('/nasabah/{id}/lpa', [App\Http\Controllers\Petugas\NasabahController::class, 'showLpa'])
+            ->name('nasabah.lpa');
+        Route::post('/nasabah/{id}/lpa', [App\Http\Controllers\Petugas\NasabahController::class, 'storeLpa'])
+            ->name('nasabah.lpa.store');
+        // // Upload Dokumen
+        // Route::get('/upload-dokumen', [App\Http\Controllers\Petugas\DokumenController::class, 'listNasabah'])
+        //     ->name('dokumen.list');
+        // Route::get('/upload-dokumen/{id}', [App\Http\Controllers\Petugas\DokumenController::class, 'form'])
+        //     ->name('dokumen.form');
+        // Route::post('/upload-dokumen/{id}', [App\Http\Controllers\Petugas\DokumenController::class, 'store'])
+        //     ->name('dokumen.store');
         
         // Nomor Surat - Main Page
         Route::get('/nomor-surat', [App\Http\Controllers\Petugas\SuratController::class, 'index'])
@@ -123,11 +132,11 @@ Route::prefix('petugas')
         Route::post('/nota', [App\Http\Controllers\Petugas\SuratController::class, 'storeNota'])
             ->name('surat.nota.store');
         
-        // LPA (Laporan Penilaian Agunan)
-        Route::get('/lpa', [App\Http\Controllers\Petugas\LpaController::class, 'index'])
-        ->name('lpa.index');
-        Route::post('/lpa', [App\Http\Controllers\Petugas\LpaController::class, 'store'])
-        ->name('lpa.store');
+        // // LPA (Laporan Penilaian Agunan)
+        // Route::get('/lpa', [App\Http\Controllers\Petugas\LpaController::class, 'index'])
+        // ->name('lpa.index');
+        // Route::post('/lpa', [App\Http\Controllers\Petugas\LpaController::class, 'store'])
+        // ->name('lpa.store');
         
         // Pengajuan Lelang
         Route::get('/pengajuan-lelang', [App\Http\Controllers\Petugas\PengajuanLelangController::class, 'index'])

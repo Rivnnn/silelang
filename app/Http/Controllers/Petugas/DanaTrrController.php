@@ -185,6 +185,12 @@ class DanaTrrController extends Controller
             $saldoSebelumnya = $trr->ledger()->orderBy('id', 'desc')->value('sisa_saldo')
                              ?? $trr->nominal_disetujui;
 
+            if ($saldoSebelumnya <= 0) {
+                return back()->with('error',
+                    'Tidak dapat mencatat pengeluaran. Sisa saldo sudah 0.'
+                );
+            }
+                
             $sisaSaldoBaru = $saldoSebelumnya - $request->debet;
 
             if ($sisaSaldoBaru < 0) {

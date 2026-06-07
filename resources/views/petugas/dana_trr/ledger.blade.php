@@ -201,8 +201,7 @@
                 </thead>
                 <tbody>
                     @foreach($trr->ledger->sortBy('id') as $i => $baris)
-                    <tr style="border-bottom:1px solid #f0f0f0;
-                               background:{{ $i === 0 ? '#f0fff4' : 'transparent' }}">
+                    <tr style="border-bottom:1px solid #f0f0f0; background:{{ $i === 0 ? '#f0fff4' : 'transparent' }}">
                         <td style="padding:10px 12px; color:#7f8c8d;">{{ $i + 1 }}</td>
                         <td style="padding:10px 12px;">{{ $baris->keterangan }}</td>
                         <td style="padding:10px 12px; text-align:right; color:#27ae60;">
@@ -284,19 +283,44 @@
     <div style="display:flex; flex-direction:column; gap:16px;">
 
         {{-- FORM CATAT PENGELUARAN --}}
-        @if($trr->status === 'aktif')
+       @if($trr->status === 'aktif')
         <div class="no-print" style="background:#fff; border-radius:12px; padding:24px;
                     box-shadow:0 2px 8px rgba(0,0,0,0.06);">
             <h3 style="margin-bottom:16px; color:#2c3e50; font-size:15px; font-weight:600;">
                 ✏️ Catat Pengeluaran Baru
             </h3>
-            <form method="POST" action="{{ route('petugas.dana-trr.ledger.store', $trr->id) }}">
+
+            @php $saldoHabis = $ringkasan['sisa_saldo_akhir'] <= 0; @endphp
+
+            @if($saldoHabis)
+            {{-- PERINGATAN SALDO HABIS --}}
+            <div style="background:#fff3cd; border:1px solid #ffc107; border-radius:10px;
+                        padding:16px; text-align:center; margin-bottom:16px;">
+                <div style="font-size:32px; margin-bottom:8px;">⚠️</div>
+                <div style="font-size:14px; font-weight:700; color:#856404; margin-bottom:4px;">
+                    Saldo Dana Habis
+                </div>
+                <div style="font-size:12px; color:#856404;">
+                    Sisa saldo Rp 0. Tidak dapat mencatat pengeluaran baru.
+                </div>
+                <button type="button" onclick="openSaldoHabisModal()"
+                        style="margin-top:12px; padding:8px 18px; background:#ffc107;
+                            color:#856404; border:none; border-radius:8px;
+                            font-size:13px; font-weight:600; cursor:pointer;">
+                    ℹ️ Lihat Info
+                </button>
+            </div>
+            @endif
+
+            <form method="POST" action="{{ route('petugas.dana-trr.ledger.store', $trr->id) }}"
+                id="formPengeluaran">
                 @csrf
                 <div style="margin-bottom:14px;" class="form-group">
                     <label>Keterangan <span class="req">*</span></label>
                     <input type="text" name="keterangan"
-                           placeholder="Contoh: Biaya pengumuman koran"
-                           value="{{ old('keterangan') }}" required>
+                        placeholder="Contoh: Biaya pengumuman koran"
+                        value="{{ old('keterangan') }}"
+                        {{ $saldoHabis ? 'disabled' : '' }} required>
                     @error('keterangan')
                         <span style="color:#e74c3c; font-size:12px;">{{ $message }}</span>
                     @enderror
@@ -304,9 +328,10 @@
                 <div style="margin-bottom:14px;" class="form-group">
                     <label>Nominal Pengeluaran (Rp) <span class="req">*</span></label>
                     <input type="number" name="debet"
-                           placeholder="Contoh: 500000"
-                           value="{{ old('debet') }}"
-                           min="100" step="100" required>
+                        placeholder="Contoh: 500000"
+                        value="{{ old('debet') }}"
+                        min="100" step="100"
+                        {{ $saldoHabis ? 'disabled' : '' }} required>
                     @error('debet')
                         <span style="color:#e74c3c; font-size:12px;">{{ $message }}</span>
                     @enderror
@@ -314,15 +339,18 @@
                 <div style="background:#f0f9ff; border:1px solid #bee3f8; border-radius:8px;
                             padding:10px 14px; margin-bottom:14px; font-size:13px;">
                     Saldo tersedia:
-                    <strong style="color:#2980b9;">
+                    <strong style="color:{{ $ringkasan['sisa_saldo_akhir'] > 0 ? '#2980b9' : '#e74c3c' }};">
                         Rp {{ number_format($ringkasan['sisa_saldo_akhir'], 0, ',', '.') }}
                     </strong>
                 </div>
-                <button type="submit"
-                        style="width:100%; padding:11px; background:#39C6C9; color:#fff;
-                               border:none; border-radius:8px; font-size:14px;
-                               font-weight:600; cursor:pointer;">
-                    + Catat Pengeluaran
+                <button type="{{ $saldoHabis ? 'button' : 'submit' }}"
+                        onclick="{{ $saldoHabis ? 'openSaldoHabisModal()' : '' }}"
+                        style="width:100%; padding:11px;
+                            background:{{ $saldoHabis ? '#adb5bd' : '#39C6C9' }};
+                            color:#fff; border:none; border-radius:8px;
+                            font-size:14px; font-weight:600;
+                            cursor:{{ $saldoHabis ? 'not-allowed' : 'pointer' }};">
+                    {{ $saldoHabis ? '🚫 Saldo Tidak Mencukupi' : '+ Catat Pengeluaran' }}
                 </button>
             </form>
         </div>

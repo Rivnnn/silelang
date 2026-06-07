@@ -9,7 +9,7 @@ class Nasabah extends Model
     protected $table = 'nasabah';
 
     protected $fillable = [
-        'user_id',  
+        'user_id',
         'nama_nasabah',
         'nik',
         'alamat',
@@ -26,6 +26,11 @@ class Nasabah extends Model
     public function dokumen()
     {
         return $this->hasMany(DokumenNasabah::class);
+    }
+
+    public function lpa()
+    {
+        return $this->hasMany(Lpa::class, 'nasabah_id');
     }
 
     public function pengajuanLelang()

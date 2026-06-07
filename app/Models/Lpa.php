@@ -38,6 +38,7 @@ class Lpa extends Model
     {
         return $this->belongsTo(User::class);
     }
+    
 
     /**
      * LPA untuk nasabah tertentu
